@@ -1,0 +1,164 @@
+use pgrx::pg_extern;
+
+use chrono::{Datelike, Days, MappedLocalTime, NaiveDate, TimeZone, Utc};
+use icu::calendar::Date;
+use icu_calendar::{persian::Persian, Iso};
+
+pgrx::pg_module_magic!();
+
+fn jalali_date_to_gregorian_internal(date: &str) -> Date<Iso> {
+    let splitted: Vec<&str> = date.split("/").collect();
+    if splitted.len() != 3 {
+        panic!("invalid date {} format", date);
+    }
+
+    let year = match splitted[0].parse::<i32>() {
+        Ok(x) => x,
+        _ => panic!("invalid date {} year value", date),
+    };
+    let month = match splitted[1].parse::<u8>() {
+        Ok(x) => x,
+        _ => panic!("invalid date {} month value", date),
+    };
+    let day = match splitted[2].parse::<u8>() {
+        Ok(x) => x,
+        _ => panic!("invalid date {} day value", date),
+    };
+
+    let jalali_date = match Date::try_new_persian_date(year, month, day) {
+        Ok(x) => x,
+        _ => panic!("invalid date {} jalali date", date),
+    };
+
+    jalali_date.to_iso()
+}
+
+#[pg_extern]
+fn jalali_date_diff_with_addition(date_start: &str, date_end: &str, addition: i32) -> i32 {
+    let iso_date_start = jalali_date_to_gregorian_internal(date_start);
+    let iso_date_end = jalali_date_to_gregorian_internal(date_end);
+
+    let utc_date_start = match Utc.with_ymd_and_hms(
+        iso_date_start.year().number,
+        iso_date_start.month().ordinal,
+        iso_date_start.day_of_month().0,
+        0,
+        0,
+        0,
+    ) {
+        MappedLocalTime::Single(x) => x,
+        _ => panic!("invalid date {} start", date_start),
+    };
+    let utc_date_end = match Utc.with_ymd_and_hms(
+        iso_date_end.year().number,
+        iso_date_end.month().ordinal,
+        iso_date_end.day_of_month().0,
+        0,
+        0,
+        0,
+    ) {
+        MappedLocalTime::Single(x) => x,
+        _ => panic!("invalid date {} end", date_end),
+    };
+
+    let date_interval = date_component::date_component::calculate(&utc_date_start, &utc_date_end);
+
+    (date_interval.interval_days as i32 + addition) * if date_interval.invert { -1 } else { 1 }
+}
+
+#[pg_extern]
+fn jalali_date_diff(date_start: &str, date_end: &str) -> i32 {
+    jalali_date_diff_with_addition(date_start, date_end, 0)
+}
+
+#[pg_extern]
+fn jalali_date_to_gregorian(date: &str) -> String {
+    let iso_date = jalali_date_to_gregorian_internal(date);
+    format!(
+        "{:0>4}-{:0>2}-{:0>2}",
+        iso_date.year().number,
+        iso_date.month().ordinal,
+        iso_date.day_of_month().0,
+    )
+}
+
+#[pg_extern]
+fn jalali_date_add_days(date: &str, days: i32) -> String {
+    let iso_date = jalali_date_to_gregorian_internal(date);
+
+    let new_iso_date = match NaiveDate::from_ymd_opt(
+        iso_date.year().number,
+        iso_date.month().ordinal,
+        iso_date.day_of_month().0,
+    ) {
+        Some(x) => x,
+        None => panic!("invalid date {} iso conversion", date),
+    };
+
+    let added_date = match if days > 0 {
+        new_iso_date.checked_add_days(Days::new(days as u64))
+    } else {
+        new_iso_date.checked_sub_days(Days::new(days.abs() as u64))
+    } {
+        Some(x) => x,
+        None => panic!("invalid date {} add day", date),
+    };
+
+    let new_jalali_date = match Date::try_new_iso_date(
+        added_date.year().try_into().unwrap(),
+        (added_date.month0() + 1).try_into().unwrap(),
+        (added_date.day0() + 1).try_into().unwrap(),
+    ) {
+        Ok(x) => x,
+        _ => panic!("invalid date {} new jalali date", date),
+    }
+    .to_calendar(Persian);
+
+    format!(
+        "{:0>4}/{:0>2}/{:0>2}",
+        new_jalali_date.year().number,
+        new_jalali_date.month().ordinal,
+        new_jalali_date.day_of_month().0
+    )
+}
+
+#[pg_extern]
+fn jalali_date_now() -> String {
+    let now = chrono::offset::Utc::now();
+    let new_date = match Date::try_new_iso_date(now.year(), now.month() as u8, now.day() as u8) {
+        Ok(x) => x,
+        _ => panic!("invalid date"),
+    }
+    .to_calendar(Persian);
+    format!(
+        "{:0>4}/{:0>2}/{:0>2}",
+        new_date.year().number,
+        new_date.month().ordinal,
+        new_date.day_of_month().0
+    )
+}
+
+#[cfg(any(test, feature = "pg_test"))]
+#[pgrx::pg_schema]
+mod tests {
+    use pgrx::prelude::*;
+
+    #[pg_test]
+    fn test_jalali_date_add_days() {
+        assert_eq!("1403/05/30", crate::jalali_date_add_days("1403/05/28", 2));
+    }
+}
+
+/// This module is required by `cargo pgrx test` invocations.
+/// It must be visible at the root of your extension crate.
+#[cfg(test)]
+pub mod pg_test {
+    pub fn setup(_options: Vec<&str>) {
+        // perform one-off initialization when the pg_test framework starts
+    }
+
+    pub fn postgresql_conf_options() -> Vec<&'static str> {
+        // return any postgresql.conf settings that are required for your tests
+        vec![]
+    }
+}
