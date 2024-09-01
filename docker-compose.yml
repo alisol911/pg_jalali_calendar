@@ -1,0 +1,10 @@
+version: "3"
+
+services:
+  database:
+    image: pgrx:1
+    restart: always
+    environment:
+      - POSTGRES_USER=fms
+      - POSTGRES_PASSWORD=fms
+      - POSTGRES_DB=fms
