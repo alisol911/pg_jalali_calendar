@@ -9,25 +9,25 @@ pgrx::pg_module_magic!();
 fn jalali_date_to_gregorian_internal(date: &str) -> Date<Iso> {
     let splitted: Vec<&str> = date.split("/").collect();
     if splitted.len() != 3 {
-        panic!("invalid date {} format", date);
+        panic!("invalid date {date} format");
     }
 
     let year = match splitted[0].parse::<i32>() {
         Ok(x) => x,
-        _ => panic!("invalid date {} year value", date),
+        _ => panic!("invalid date {date} year value"),
     };
     let month = match splitted[1].parse::<u8>() {
         Ok(x) => x,
-        _ => panic!("invalid date {} month value", date),
+        _ => panic!("invalid date {date} month value"),
     };
     let day = match splitted[2].parse::<u8>() {
         Ok(x) => x,
-        _ => panic!("invalid date {} day value", date),
+        _ => panic!("invalid date {date} day value"),
     };
 
     let jalali_date = match Date::try_new_persian_date(year, month, day) {
         Ok(x) => x,
-        _ => panic!("invalid date {} jalali date", date),
+        _ => panic!("invalid date {date} jalali date"),
     };
 
     jalali_date.to_iso()
@@ -47,7 +47,7 @@ fn jalali_date_diff_with_addition(date_start: &str, date_end: &str, addition: i3
         0,
     ) {
         MappedLocalTime::Single(x) => x,
-        _ => panic!("invalid date {} start", date_start),
+        _ => panic!("invalid date {date_start} start"),
     };
     let utc_date_end = match Utc.with_ymd_and_hms(
         iso_date_end.year().number,
@@ -58,7 +58,7 @@ fn jalali_date_diff_with_addition(date_start: &str, date_end: &str, addition: i3
         0,
     ) {
         MappedLocalTime::Single(x) => x,
-        _ => panic!("invalid date {} end", date_end),
+        _ => panic!("invalid date {date_end} end"),
     };
 
     let date_interval = date_component::date_component::calculate(&utc_date_start, &utc_date_end);
@@ -92,7 +92,7 @@ fn jalali_date_add_days(date: &str, days: i32) -> String {
         iso_date.day_of_month().0,
     ) {
         Some(x) => x,
-        None => panic!("invalid date {} iso conversion", date),
+        None => panic!("invalid date {date} iso conversion"),
     };
 
     let added_date = match if days > 0 {
@@ -101,7 +101,7 @@ fn jalali_date_add_days(date: &str, days: i32) -> String {
         new_iso_date.checked_sub_days(Days::new(days.abs() as u64))
     } {
         Some(x) => x,
-        None => panic!("invalid date {} add day", date),
+        None => panic!("invalid date {date} add day"),
     };
 
     let new_jalali_date = match Date::try_new_iso_date(
@@ -110,7 +110,7 @@ fn jalali_date_add_days(date: &str, days: i32) -> String {
         (added_date.day0() + 1).try_into().unwrap(),
     ) {
         Ok(x) => x,
-        _ => panic!("invalid date {} new jalali date", date),
+        _ => panic!("invalid date {date} new jalali date"),
     }
     .to_calendar(Persian);
 
@@ -135,6 +135,41 @@ fn jalali_date_now() -> String {
         new_date.year().number,
         new_date.month().ordinal,
         new_date.day_of_month().0
+    )
+}
+
+#[pg_extern]
+fn gregorian_date_to_jalali(date: &str) -> String {
+    let splitted: Vec<&str> = date.split("-").collect();
+    if splitted.len() != 3 {
+        panic!("invalid date {date} format");
+    }
+
+    let year = match splitted[0].parse::<i32>() {
+        Ok(x) => x,
+        _ => panic!("invalid date {date} year value"),
+    };
+    let month = match splitted[1].parse::<u8>() {
+        Ok(x) => x,
+        _ => panic!("invalid date {date} month value"),
+    };
+    let day = match splitted[2].parse::<u8>() {
+        Ok(x) => x,
+        _ => panic!("invalid date {date} day value"),
+    };
+
+    let gregorian_date = match icu::calendar::Date::try_new_gregorian_date(year, month, day) {
+        Ok(x) => x,
+        _ => panic!("invalid date {date} gregorian date"),
+    };
+
+    let jalali_date = gregorian_date.to_calendar(Persian);
+
+    format!(
+        "{:0>4}/{:0>2}/{:0>2}",
+        jalali_date.year().number,
+        jalali_date.month().ordinal,
+        jalali_date.day_of_month().0
     )
 }
 
