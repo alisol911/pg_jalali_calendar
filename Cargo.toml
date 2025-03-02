@@ -11,20 +11,19 @@ name = "pgrx_embed_pg_jalali_calendar"
 path = "./src/bin/pgrx_embed.rs"
 
 [features]
-default = ["pg16"]
-pg16 = ["pgrx/pg16", "pgrx-tests/pg16" ]
+default = ["pg17"]
 pg17 = ["pgrx/pg17", "pgrx-tests/pg17" ]
 pg_test = []
 
 [dependencies]
-chrono = "0.4.38"
-date_component = "0.4.1"
+chrono = "0.4.40"
+date_component = "0.4.2"
 icu = "1.5.0"
 icu_calendar = "1.5.2"
-pgrx = "=0.12.9"
+pgrx = "=0.13.1"
 
 [dev-dependencies]
-pgrx-tests = "=0.12.9"
+pgrx-tests = "=0.13.1"
 
 [profile.dev]
 panic = "unwind"

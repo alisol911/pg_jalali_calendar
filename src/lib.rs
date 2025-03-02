@@ -1,4 +1,4 @@
-use pgrx::pg_extern;
+use pgrx::prelude::*;
 
 use chrono::{Datelike, Days, MappedLocalTime, NaiveDate, TimeZone, Utc};
 use icu::{calendar::Date, collections::codepointtrie::TrieValue};
@@ -222,8 +222,14 @@ fn jalali_date_period_state(date: &str, start: i32) -> String {
     "Unknown".to_string()
 }
 
+#[pg_extern]
+fn jalali_date_is_leap_year(date: &str) -> bool {
+    let date_value = jalali_date_parse(date);
+    date_value.is_in_leap_year()
+}
+
 #[cfg(any(test, feature = "pg_test"))]
-#[pgrx::pg_schema]
+#[pg_schema]
 mod tests {
     use pgrx::prelude::*;
 
@@ -241,6 +247,7 @@ pub mod pg_test {
         // perform one-off initialization when the pg_test framework starts
     }
 
+    #[must_use]
     pub fn postgresql_conf_options() -> Vec<&'static str> {
         // return any postgresql.conf settings that are required for your tests
         vec![]

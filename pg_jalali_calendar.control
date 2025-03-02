@@ -3,3 +3,4 @@ default_version = '@CARGO_VERSION@'
 module_pathname = '$libdir/pg_jalali_calendar'
 relocatable = false
 superuser = true
+trusted = true
