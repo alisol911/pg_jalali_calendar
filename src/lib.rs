@@ -6,7 +6,7 @@ use icu_calendar::{persian::Persian, Iso};
 
 pgrx::pg_module_magic!();
 
-fn jalali_date_parse(date: &str) -> Date<Persian> {
+fn jalali_date_parse_raw(date: &str) -> (i32, u8, u8) {
     let splitted: Vec<&str> = date.split("/").collect();
     if splitted.len() != 3 {
         panic!("invalid date {date} format");
@@ -24,7 +24,11 @@ fn jalali_date_parse(date: &str) -> Date<Persian> {
         Ok(x) => x,
         _ => panic!("invalid date {date} day value"),
     };
+    (year, month, day)
+}
 
+fn jalali_date_parse(date: &str) -> Date<Persian> {
+    let (year, month, day) = jalali_date_parse_raw(date);
     match Date::try_new_persian_date(year, month, day) {
         Ok(x) => x,
         _ => panic!("invalid date {date} jalali date"),
@@ -125,6 +129,54 @@ fn jalali_date_add_days(date: &str, days: i32) -> String {
         new_jalali_date.month().ordinal,
         new_jalali_date.day_of_month().0
     )
+}
+
+#[pg_extern]
+fn jalali_date_add_months(date: &str, months: i32) -> String {
+    let (year, month, day) = jalali_date_parse_raw(date);
+
+    let _parsed = match Date::try_new_persian_date(year, month, day) {
+        Ok(x) => x,
+        _ => panic!("invalid date {date} jalali date"),
+    };
+
+    if months <= 0 {
+        panic!("invalid months value")
+    }
+
+    let new_year_raw = if months >= 0 {
+        year + (months as i32 / 12)
+    } else {
+        year - (-months as i32 / 12)
+    };
+
+    let new_month_raw = if months >= 0 {
+        month + (months as i32 % 12) as u8
+    } else {
+        month - (-months as i32 % 12) as u8
+    };
+
+    let (new_year, new_month) = if new_month_raw > 12 {
+        (new_year_raw + 1, new_month_raw - 12)
+    } else {
+        (new_year_raw, new_month_raw)
+    };
+
+    let date_check = match Date::try_new_persian_date(new_year, 1, 1) {
+        Ok(x) => x,
+        _ => panic!("invalid date {new_year}/01/01 jalali date"),
+    };
+
+    let day = if (date_check.is_in_leap_year() && new_month == 12 && day > 29)
+        || (new_month > 6 && new_month < 12 && day > 30)
+    {
+        30
+    } else if new_month == 12 && day > 29 {
+        29
+    } else {
+        day
+    };
+    format!("{:0>4}/{:0>2}/{:0>2}", new_year, new_month, day,)
 }
 
 #[pg_extern]
