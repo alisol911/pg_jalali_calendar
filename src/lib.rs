@@ -4,7 +4,7 @@ use chrono::{Datelike, Days, MappedLocalTime, NaiveDate, TimeZone, Utc};
 use icu::{calendar::Date, collections::codepointtrie::TrieValue};
 use icu_calendar::{persian::Persian, Iso};
 
-pgrx::pg_module_magic!();
+pgrx::pg_module_magic!(name, version);
 
 fn jalali_date_parse_raw(date: &str) -> (i32, u8, u8) {
     let splitted: Vec<&str> = date.split("/").collect();

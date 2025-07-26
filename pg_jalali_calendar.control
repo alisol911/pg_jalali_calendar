@@ -1,6 +1,6 @@
 comment = 'pg_jalali_calendar:  Created by pgrx'
 default_version = '@CARGO_VERSION@'
-module_pathname = '$libdir/pg_jalali_calendar'
+module_pathname = 'pg_jalali_calendar'
 relocatable = false
 superuser = true
 trusted = true
