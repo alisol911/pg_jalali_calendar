@@ -6,32 +6,37 @@ use icu_calendar::{persian::Persian, Iso};
 
 pgrx::pg_module_magic!(name, version);
 
-fn jalali_date_parse_raw(date: &str) -> (i32, u8, u8) {
+fn jalali_date_parse_raw(date: &str) -> Result<(i32, u8, u8), String> {
     let splitted: Vec<&str> = date.split("/").collect();
     if splitted.len() != 3 {
-        panic!("invalid date {date} format");
+        return Err(format!("invalid date {date} format"));
     }
 
     let year = match splitted[0].parse::<i32>() {
         Ok(x) => x,
-        _ => panic!("invalid date {date} year value"),
+        _ => return Err(format!("invalid date {date} year value")),
     };
     let month = match splitted[1].parse::<u8>() {
         Ok(x) => x,
-        _ => panic!("invalid date {date} month value"),
+        _ => return Err(format!("invalid date {date} month value")),
     };
     let day = match splitted[2].parse::<u8>() {
         Ok(x) => x,
-        _ => panic!("invalid date {date} day value"),
+        _ => return Err(format!("invalid date {date} day value")),
     };
-    (year, month, day)
+    if year < 1 || month < 1 || day < 1 {
+        return Err(format!("invalid date {date} format"));
+    }
+    Ok((year, month, day))
 }
 
 fn jalali_date_parse(date: &str) -> Date<Persian> {
-    let (year, month, day) = jalali_date_parse_raw(date);
-    match Date::try_new_persian_date(year, month, day) {
-        Ok(x) => x,
-        _ => panic!("invalid date {date} jalali date"),
+    match jalali_date_parse_raw(date) {
+        Ok((year, month, day)) => match Date::try_new_persian_date(year, month, day) {
+            Ok(x) => x,
+            _ => panic!("invalid date {date} jalali date"),
+        },
+        Err(e) => panic!("{e}"),
     }
 }
 
@@ -133,7 +138,10 @@ fn jalali_date_add_days(date: &str, days: i32) -> String {
 
 #[pg_extern]
 fn jalali_date_add_months(date: &str, months: i32) -> String {
-    let (year, month, day) = jalali_date_parse_raw(date);
+    let (year, month, day) = match jalali_date_parse_raw(date) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
+    };
 
     let _parsed = match Date::try_new_persian_date(year, month, day) {
         Ok(x) => x,
@@ -278,6 +286,17 @@ fn jalali_date_period_state(date: &str, start: i32) -> String {
 fn jalali_date_is_leap_year(date: &str) -> bool {
     let date_value = jalali_date_parse(date);
     date_value.is_in_leap_year()
+}
+
+#[pg_extern]
+fn jalali_date_is_valid(date: &str) -> bool {
+    match jalali_date_parse_raw(date) {
+        Ok((year, month, day)) => match Date::try_new_persian_date(year, month, day) {
+            Ok(_) => true,
+            Err(_) => false,
+        },
+        Err(_) => false,
+    }
 }
 
 #[cfg(any(test, feature = "pg_test"))]
