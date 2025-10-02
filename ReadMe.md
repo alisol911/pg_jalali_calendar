@@ -1,16 +1,16 @@
 sudo apt install build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev libssl-dev libxml2-utils xsltproc ccache pkg-config clang
-sudo apt install postgresql-server-dev-17
+sudo apt install postgresql-server-dev-18
 
 cargo install cargo-edit
 cargo install --locked cargo-pgrx
-cargo pgrx init --pg17 /usr/bin/pg_config
+cargo pgrx init --pg18 /usr/bin/pg_config
 
 cargo upgrade -i allow && cargo update
 
 cargo pgrx new pg_jalali_calendar
 cargo pgrx package
 cargo pgrx install
-cargo pgrx run pg17
+cargo pgrx run pg18
 
-cargo pgrx test pg17
+cargo pgrx test pg18
 
