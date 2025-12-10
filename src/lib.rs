@@ -3,6 +3,8 @@ use pgrx::prelude::*;
 use chrono::{Datelike, Days, MappedLocalTime, NaiveDate, TimeZone, Utc};
 use icu::{calendar::Date, collections::codepointtrie::TrieValue};
 use icu_calendar::{persian::Persian, Iso};
+use rust_persian_tools::number_to_words::number_to_words;
+use rust_persian_tools::add_ordinal_suffix::add_ordinal_suffix;
 
 pgrx::pg_module_magic!(name, version);
 
@@ -297,6 +299,19 @@ fn jalali_date_is_valid(date: &str) -> bool {
         },
         Err(_) => false,
     }
+}
+
+#[pg_extern]
+fn number_to_farsi_word(value: i64) -> String {
+    match number_to_words(value) {
+        Ok(result) => result,
+        Err(e) => e.to_string()
+    }
+}
+
+#[pg_extern]
+fn farsi_word_add_suffix(value: &str) -> String {
+    add_ordinal_suffix(value)
 }
 
 #[cfg(any(test, feature = "pg_test"))]

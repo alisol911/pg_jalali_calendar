@@ -21,6 +21,7 @@ date_component = "0.4.5"
 icu = "1.5.0"
 icu_calendar = "1.5.2"
 pgrx = "0.16.1"
+rust-persian-tools = "1.1.4"
 
 [dev-dependencies]
 pgrx-tests = "0.16.1"
