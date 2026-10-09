@@ -1,8 +1,8 @@
 use pgrx::prelude::*;
 
 use chrono::{Datelike, Days, MappedLocalTime, NaiveDate, TimeZone, Utc};
-use icu::{calendar::Date, collections::codepointtrie::TrieValue};
-use icu_calendar::{persian::Persian, Iso};
+use icu::{calendar::Date};
+use icu_calendar::{cal::Persian, Iso};
 use rust_persian_tools::number_to_words::number_to_words;
 use rust_persian_tools::add_ordinal_suffix::add_ordinal_suffix;
 
@@ -14,47 +14,50 @@ fn jalali_date_parse_raw(date: &str) -> Result<(i32, u8, u8), String> {
         return Err(format!("invalid date {date} format"));
     }
 
-    let year = match splitted[0].parse::<i32>() {
-        Ok(x) => x,
-        _ => return Err(format!("invalid date {date} year value")),
-    };
-    let month = match splitted[1].parse::<u8>() {
-        Ok(x) => x,
-        _ => return Err(format!("invalid date {date} month value")),
-    };
-    let day = match splitted[2].parse::<u8>() {
-        Ok(x) => x,
-        _ => return Err(format!("invalid date {date} day value")),
-    };
+    let year = splitted[0]
+        .parse::<i32>()
+        .map_err(|_| format!("invalid date {date} year value"))?;
+
+    let month = splitted[1]
+        .parse::<u8>()
+        .map_err(|_| format!("invalid date {date} month value"))?;
+
+    let day = splitted[2]
+        .parse::<u8>()
+        .map_err(|_| format!("invalid date {date} day value"))?;
+
     if year < 1 || month < 1 || day < 1 {
         return Err(format!("invalid date {date} format"));
     }
+
     Ok((year, month, day))
 }
 
 fn jalali_date_parse(date: &str) -> Date<Persian> {
-    match jalali_date_parse_raw(date) {
-        Ok((year, month, day)) => match Date::try_new_persian_date(year, month, day) {
-            Ok(x) => x,
-            _ => panic!("invalid date {date} jalali date"),
-        },
-        Err(e) => panic!("{e}"),
-    }
+    let (year, month, day) =
+        jalali_date_parse_raw(date).unwrap_or_else(|e| panic!("{e}"));
+
+    Date::try_new_persian(year, month, day)
+        .unwrap_or_else(|_| panic!("invalid date {date} jalali date"))
 }
 
 fn jalali_date_to_gregorian_internal(date: &str) -> Date<Iso> {
-    jalali_date_parse(date).to_iso()
+    jalali_date_parse(date).to_calendar(Iso)
 }
 
 #[pg_extern]
-fn jalali_date_diff_with_addition(date_start: &str, date_end: &str, addition: i32) -> i32 {
+fn jalali_date_diff_with_addition(
+    date_start: &str,
+    date_end: &str,
+    addition: i32,
+) -> i32 {
     let iso_date_start = jalali_date_to_gregorian_internal(date_start);
     let iso_date_end = jalali_date_to_gregorian_internal(date_end);
 
     let utc_date_start = match Utc.with_ymd_and_hms(
-        iso_date_start.year().number,
-        iso_date_start.month().ordinal,
-        iso_date_start.day_of_month().0,
+        iso_date_start.year().extended_year(),
+        iso_date_start.month().ordinal.into(),
+        iso_date_start.day_of_month().0.into(),
         0,
         0,
         0,
@@ -62,10 +65,11 @@ fn jalali_date_diff_with_addition(date_start: &str, date_end: &str, addition: i3
         MappedLocalTime::Single(x) => x,
         _ => panic!("invalid date {date_start} start"),
     };
+
     let utc_date_end = match Utc.with_ymd_and_hms(
-        iso_date_end.year().number,
-        iso_date_end.month().ordinal,
-        iso_date_end.day_of_month().0,
+        iso_date_end.year().extended_year(),
+        iso_date_end.month().ordinal.into(),
+        iso_date_end.day_of_month().0.into(),
         0,
         0,
         0,
@@ -74,9 +78,14 @@ fn jalali_date_diff_with_addition(date_start: &str, date_end: &str, addition: i3
         _ => panic!("invalid date {date_end} end"),
     };
 
-    let date_interval = date_component::date_component::calculate(&utc_date_start, &utc_date_end);
+    let date_interval =
+        date_component::date_component::calculate(
+            &utc_date_start,
+            &utc_date_end,
+        );
 
-    (date_interval.interval_days as i32 + addition) * if date_interval.invert { -1 } else { 1 }
+    (date_interval.interval_days as i32 + addition)
+        * if date_interval.invert { -1 } else { 1 }
 }
 
 #[pg_extern]
@@ -89,7 +98,7 @@ fn jalali_date_to_gregorian(date: &str) -> String {
     let iso_date = jalali_date_to_gregorian_internal(date);
     format!(
         "{:0>4}-{:0>2}-{:0>2}",
-        iso_date.year().number,
+        iso_date.year().extended_year(),
         iso_date.month().ordinal,
         iso_date.day_of_month().0,
     )
@@ -99,9 +108,9 @@ fn jalali_date_add_days_internal(date: &str, days: i32) -> Date<Persian> {
     let iso_date = jalali_date_to_gregorian_internal(date);
 
     let new_iso_date = match NaiveDate::from_ymd_opt(
-        iso_date.year().number,
-        iso_date.month().ordinal,
-        iso_date.day_of_month().0,
+        iso_date.year().extended_year(),
+        iso_date.month().ordinal.into(),
+        iso_date.day_of_month().0.into(),
     ) {
         Some(x) => x,
         None => panic!("invalid date {date} iso conversion"),
@@ -116,7 +125,7 @@ fn jalali_date_add_days_internal(date: &str, days: i32) -> Date<Persian> {
         None => panic!("invalid date {date} add day"),
     };
 
-    match Date::try_new_iso_date(
+    match Date::try_new_iso(
         added_date.year().try_into().unwrap(),
         (added_date.month0() + 1).try_into().unwrap(),
         (added_date.day0() + 1).try_into().unwrap(),
@@ -132,7 +141,7 @@ fn jalali_date_add_days(date: &str, days: i32) -> String {
     let new_jalali_date = jalali_date_add_days_internal(date, days);
     format!(
         "{:0>4}/{:0>2}/{:0>2}",
-        new_jalali_date.year().number,
+        new_jalali_date.year().extended_year(),
         new_jalali_date.month().ordinal,
         new_jalali_date.day_of_month().0
     )
@@ -145,7 +154,7 @@ fn jalali_date_add_months(date: &str, months: i32) -> String {
         Err(e) => panic!("{e}"),
     };
 
-    let _parsed = match Date::try_new_persian_date(year, month, day) {
+    let _parsed = match Date::try_new_persian(year, month, day) {
         Ok(x) => x,
         _ => panic!("invalid date {date} jalali date"),
     };
@@ -172,7 +181,7 @@ fn jalali_date_add_months(date: &str, months: i32) -> String {
         (new_year_raw, new_month_raw)
     };
 
-    let date_check = match Date::try_new_persian_date(new_year, 1, 1) {
+    let date_check = match Date::try_new_persian(new_year, 1, 1) {
         Ok(x) => x,
         _ => panic!("invalid date {new_year}/01/01 jalali date"),
     };
@@ -192,14 +201,14 @@ fn jalali_date_add_months(date: &str, months: i32) -> String {
 #[pg_extern]
 fn jalali_date_now() -> String {
     let now = chrono::offset::Utc::now();
-    let new_date = match Date::try_new_iso_date(now.year(), now.month() as u8, now.day() as u8) {
+    let new_date = match Date::try_new_iso(now.year(), now.month() as u8, now.day() as u8) {
         Ok(x) => x,
         _ => panic!("invalid date"),
     }
     .to_calendar(Persian);
     format!(
         "{:0>4}/{:0>2}/{:0>2}",
-        new_date.year().number,
+        new_date.year().extended_year(),
         new_date.month().ordinal,
         new_date.day_of_month().0
     )
@@ -225,7 +234,7 @@ fn gregorian_date_to_jalali(date: &str) -> String {
         _ => panic!("invalid date {date} day value"),
     };
 
-    let gregorian_date = match icu::calendar::Date::try_new_gregorian_date(year, month, day) {
+    let gregorian_date = match icu::calendar::Date::try_new_gregorian(year, month, day) {
         Ok(x) => x,
         _ => panic!("invalid date {date} gregorian date"),
     };
@@ -234,7 +243,7 @@ fn gregorian_date_to_jalali(date: &str) -> String {
 
     format!(
         "{:0>4}/{:0>2}/{:0>2}",
-        jalali_date.year().number,
+        jalali_date.year().extended_year(),
         jalali_date.month().ordinal,
         jalali_date.day_of_month().0
     )
@@ -252,14 +261,14 @@ fn jalali_date_period_state(date: &str, start: i32) -> String {
                 || (date_value.month().ordinal == 12 && date_value.is_in_leap_year())))
         || (date_value.day_of_month().0 == 31 && date_value.month().ordinal <= 6);
 
-    if month_end && date_value.day_of_month().0 <= start.to_u32() {
+    if month_end && i32::from(date_value.day_of_month().0) <= start {
         return "End".to_string();
     };
 
     if date_value.day_of_month().0 == 1 {
         if date_value.month().ordinal == 1
             && (start >= 30
-                || start.to_u32() == jalali_date_add_days_internal(date, -1).day_of_month().0)
+                || start == i32::from(jalali_date_add_days_internal(date, -1).day_of_month().0))
         {
             return "Start".to_string();
         }
@@ -272,9 +281,9 @@ fn jalali_date_period_state(date: &str, start: i32) -> String {
     }
 
     if start >= 1 && start <= 31 {
-        if date_value.day_of_month().0 == start.to_u32() {
+        if i32::from(date_value.day_of_month().0) == start {
             return "End".to_string();
-        } else if date_value.day_of_month().0 == start.to_u32() + 1 {
+        } else if i32::from(date_value.day_of_month().0) == start + 1 {
             return "Start".to_string();
         } else {
             return "Middle".to_string();
@@ -293,7 +302,7 @@ fn jalali_date_is_leap_year(date: &str) -> bool {
 #[pg_extern]
 fn jalali_date_is_valid(date: &str) -> bool {
     match jalali_date_parse_raw(date) {
-        Ok((year, month, day)) => match Date::try_new_persian_date(year, month, day) {
+        Ok((year, month, day)) => match Date::try_new_persian(year, month, day) {
             Ok(_) => true,
             Err(_) => false,
         },

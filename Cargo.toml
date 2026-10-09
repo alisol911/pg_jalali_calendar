@@ -1,14 +1,11 @@
 [package]
 name = "pg_jalali_calendar"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+resolver = "3"
 
 [lib]
-crate-type = ["cdylib", "lib"]
-
-[[bin]]
-name = "pgrx_embed_pg_jalali_calendar"
-path = "./src/bin/pgrx_embed.rs"
+crate-type = ["cdylib"]
 
 [features]
 default = ["pg18"]
@@ -16,15 +13,15 @@ pg18 = ["pgrx/pg18", "pgrx-tests/pg18" ]
 pg_test = []
 
 [dependencies]
-chrono = "0.4.42"
-date_component = "0.4.5"
-icu = "1.5.0"
-icu_calendar = "1.5.2"
-pgrx = "0.16.1"
+chrono = "0.4.45"
+date_component = "0.4.8"
+icu = "2.3.1"
+icu_calendar = "2.3.0"
+pgrx = "0.19.3"
 rust-persian-tools = "1.1.4"
 
 [dev-dependencies]
-pgrx-tests = "0.16.1"
+pgrx-tests = "0.19.3"
 
 [profile.dev]
 panic = "unwind"
